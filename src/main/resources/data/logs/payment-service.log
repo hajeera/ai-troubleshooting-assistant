@@ -1,0 +1,20 @@
+2026-10-29T09:00:01.112Z  INFO [payment-service,main] c.t.payment.PaymentApplication : Started PaymentApplication in 6.21 seconds (version 2.14.0)
+2026-10-29T09:00:01.540Z  INFO [payment-service,main] com.zaxxer.hikari.HikariDataSource : PaymentPool - Start completed. maximumPoolSize=10
+2026-10-29T09:02:15.003Z  INFO [payment-service,http-nio-8080-exec-1] c.t.payment.PaymentController : POST /payments orderId=ORD-88121 amount=1499.00 status=SUCCESS latencyMs=84
+2026-10-29T09:02:16.201Z  INFO [payment-service,http-nio-8080-exec-2] c.t.payment.PaymentController : POST /payments orderId=ORD-88122 amount=299.00 status=SUCCESS latencyMs=91
+2026-10-29T09:05:40.877Z  INFO [payment-service,http-nio-8080-exec-4] c.t.payment.RefundService : Refund batch job started, batchSize=5000
+2026-10-29T09:05:41.010Z DEBUG [payment-service,refund-batch-1] c.t.payment.RefundService : Opening transaction for refund batch (connection held until batch completes)
+2026-10-29T09:06:12.334Z  WARN [payment-service,http-nio-8080-exec-7] com.zaxxer.hikari.pool.HikariPool : PaymentPool - Connection is not available, active=10 idle=0 waiting=14
+2026-10-29T09:06:12.340Z  WARN [payment-service,http-nio-8080-exec-7] c.t.payment.PaymentController : POST /payments orderId=ORD-88140 slow response latencyMs=4870
+2026-10-29T09:06:30.002Z ERROR [payment-service,http-nio-8080-exec-9] o.h.engine.jdbc.spi.SqlExceptionHelper : PaymentPool - Connection is not available, request timed out after 30000ms.
+2026-10-29T09:06:30.005Z ERROR [payment-service,http-nio-8080-exec-9] c.t.payment.PaymentController : POST /payments orderId=ORD-88141 status=FAILED error=CannotCreateTransactionException: Could not open JPA EntityManager for transaction
+2026-10-29T09:06:31.118Z ERROR [payment-service,http-nio-8080-exec-3] c.t.payment.PaymentController : POST /payments orderId=ORD-88142 status=FAILED error=SQLTransientConnectionException: PaymentPool - Connection is not available, request timed out after 30000ms.
+2026-10-29T09:06:45.700Z  WARN [payment-service,HikariPool-housekeeper] com.zaxxer.hikari.pool.ProxyLeakTask : Connection leak detection triggered for org.postgresql.jdbc.PgConnection@5f2a91 on thread refund-batch-1, stack trace follows: at c.t.payment.RefundService.processBatch(RefundService.java:112)
+2026-10-29T09:07:02.441Z ERROR [payment-service,http-nio-8080-exec-5] c.t.payment.PaymentController : POST /payments orderId=ORD-88150 status=FAILED error=SQLTransientConnectionException: PaymentPool - Connection is not available, request timed out after 30000ms.
+2026-10-29T09:07:10.000Z  WARN [payment-service,actuator] o.s.b.a.health.HealthEndpoint : Health check db=DOWN reason=connection pool exhausted
+2026-10-29T09:07:15.912Z ERROR [payment-service,http-nio-8080-exec-6] c.t.payment.PaymentController : POST /payments orderId=ORD-88151 status=FAILED error=SQLTransientConnectionException: PaymentPool - Connection is not available, request timed out after 30000ms.
+2026-10-29T09:08:00.120Z  INFO [payment-service,metrics] c.t.payment.MetricsReporter : last_5m requests=212 errors=97 errorRate=45.7% p99LatencyMs=30012
+2026-10-29T09:09:12.303Z ERROR [payment-service,http-nio-8080-exec-2] c.t.payment.PaymentController : POST /payments orderId=ORD-88163 status=FAILED error=SQLTransientConnectionException: PaymentPool - Connection is not available, request timed out after 30000ms.
+2026-10-29T09:10:00.004Z  INFO [payment-service,refund-batch-1] c.t.payment.RefundService : Refund batch progress 1850/5000
+2026-10-29T09:10:30.557Z  WARN [payment-service,http-nio-8080-exec-8] com.zaxxer.hikari.pool.HikariPool : PaymentPool - Connection is not available, active=10 idle=0 waiting=22
+2026-10-29T09:11:02.871Z ERROR [payment-service,http-nio-8080-exec-1] c.t.payment.PaymentController : POST /payments orderId=ORD-88170 status=FAILED error=SQLTransientConnectionException: PaymentPool - Connection is not available, request timed out after 30000ms.

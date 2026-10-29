@@ -1,0 +1,17 @@
+# Build output
+target/
+*.class
+*.jar
+
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets - never commit API keys
+.env
+application-local.yml

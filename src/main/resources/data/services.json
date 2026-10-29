@@ -1,0 +1,26 @@
+[
+  {
+    "name": "payment-service",
+    "version": "2.14.0",
+    "status": "DOWN",
+    "lastDeployment": "2026-10-28T18:30:00Z",
+    "components": { "db": "DOWN", "diskSpace": "UP", "kafka": "UP" },
+    "metrics": { "errorRatePercent": 45.7, "p99LatencyMs": 30012, "dbPoolActive": 10, "dbPoolMax": 10, "dbPoolWaiting": 22, "cpuPercent": 38, "heapUsedPercent": 61 }
+  },
+  {
+    "name": "order-service",
+    "version": "3.8.1",
+    "status": "DEGRADED",
+    "lastDeployment": "2026-10-20T10:00:00Z",
+    "components": { "db": "UP", "diskSpace": "UP", "paymentServiceCircuitBreaker": "OPEN" },
+    "metrics": { "errorRatePercent": 36.7, "p99LatencyMs": 5020, "pendingPayments": 74, "cpuPercent": 22, "heapUsedPercent": 47 }
+  },
+  {
+    "name": "inventory-service",
+    "version": "1.22.3",
+    "status": "UP",
+    "lastDeployment": "2026-10-15T09:00:00Z",
+    "components": { "db": "UP", "diskSpace": "UP", "redis": "UP" },
+    "metrics": { "errorRatePercent": 0.0, "p99LatencyMs": 51, "heldReservations": 61, "cpuPercent": 15, "heapUsedPercent": 40 }
+  }
+]

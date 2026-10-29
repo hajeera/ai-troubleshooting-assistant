@@ -1,0 +1,7 @@
+2026-10-29T08:50:02.010Z  INFO [inventory-service,main] c.t.inventory.InventoryApplication : Started InventoryApplication in 4.40 seconds (version 1.22.3)
+2026-10-29T09:02:14.990Z  INFO [inventory-service,http-nio-8082-exec-1] c.t.inventory.StockController : PUT /stock/reserve sku=SKU-2231 qty=1 status=RESERVED latencyMs=22
+2026-10-29T09:02:16.180Z  INFO [inventory-service,http-nio-8082-exec-2] c.t.inventory.StockController : PUT /stock/reserve sku=SKU-7710 qty=2 status=RESERVED latencyMs=19
+2026-10-29T09:06:35.020Z  INFO [inventory-service,http-nio-8082-exec-3] c.t.inventory.StockController : PUT /stock/reserve sku=SKU-1189 qty=1 status=RESERVED latencyMs=25
+2026-10-29T09:08:00.300Z  INFO [inventory-service,metrics] c.t.inventory.MetricsReporter : last_5m requests=238 errors=0 errorRate=0.0% p99LatencyMs=48
+2026-10-29T09:09:30.000Z  WARN [inventory-service,scheduler-2] c.t.inventory.ReservationJob : 61 reservations held longer than 2 minutes awaiting order confirmation
+2026-10-29T09:10:00.400Z  INFO [inventory-service,metrics] c.t.inventory.MetricsReporter : last_5m requests=231 errors=0 errorRate=0.0% p99LatencyMs=51

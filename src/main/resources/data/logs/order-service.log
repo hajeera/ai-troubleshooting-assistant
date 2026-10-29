@@ -1,0 +1,14 @@
+2026-10-29T08:55:00.410Z  INFO [order-service,main] c.t.order.OrderApplication : Started OrderApplication in 5.02 seconds (version 3.8.1)
+2026-10-29T09:02:14.950Z  INFO [order-service,http-nio-8081-exec-1] c.t.order.OrderController : POST /orders orderId=ORD-88121 status=CREATED latencyMs=142
+2026-10-29T09:02:16.150Z  INFO [order-service,http-nio-8081-exec-2] c.t.order.OrderController : POST /orders orderId=ORD-88122 status=CREATED latencyMs=150
+2026-10-29T09:06:12.360Z  WARN [order-service,http-nio-8081-exec-4] c.t.order.client.PaymentClient : Slow call to payment-service POST /payments latencyMs=4895 orderId=ORD-88140
+2026-10-29T09:06:30.020Z ERROR [order-service,http-nio-8081-exec-6] c.t.order.client.PaymentClient : payment-service returned 500 for orderId=ORD-88141
+2026-10-29T09:06:35.001Z ERROR [order-service,http-nio-8081-exec-7] c.t.order.client.PaymentClient : Call to payment-service timed out after 5000ms orderId=ORD-88145 error=java.net.SocketTimeoutException: Read timed out
+2026-10-29T09:06:35.010Z  WARN [order-service,http-nio-8081-exec-7] c.t.order.OrderService : Order ORD-88145 moved to PAYMENT_PENDING, will retry
+2026-10-29T09:07:01.300Z  WARN [order-service,resilience4j] i.g.r.circuitbreaker.CircuitBreaker : CircuitBreaker 'paymentService' changed state from CLOSED to OPEN failureRate=52.0%
+2026-10-29T09:07:01.305Z ERROR [order-service,http-nio-8081-exec-2] c.t.order.client.PaymentClient : CallNotPermittedException: CircuitBreaker 'paymentService' is OPEN orderId=ORD-88150
+2026-10-29T09:08:00.200Z  INFO [order-service,metrics] c.t.order.MetricsReporter : last_5m requests=240 errors=88 errorRate=36.7% pendingPayments=61
+2026-10-29T09:08:01.300Z  INFO [order-service,resilience4j] i.g.r.circuitbreaker.CircuitBreaker : CircuitBreaker 'paymentService' changed state from OPEN to HALF_OPEN
+2026-10-29T09:08:06.120Z ERROR [order-service,http-nio-8081-exec-3] c.t.order.client.PaymentClient : payment-service returned 500 for orderId=ORD-88160
+2026-10-29T09:08:06.125Z  WARN [order-service,resilience4j] i.g.r.circuitbreaker.CircuitBreaker : CircuitBreaker 'paymentService' changed state from HALF_OPEN to OPEN
+2026-10-29T09:10:00.900Z  WARN [order-service,scheduler-1] c.t.order.PaymentRetryJob : 74 orders in PAYMENT_PENDING older than 2 minutes
