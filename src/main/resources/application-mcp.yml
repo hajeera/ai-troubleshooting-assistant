@@ -1,0 +1,22 @@
+# Profile used when Claude Desktop starts the jar:  --spring.profiles.active=mcp
+#
+# With STDIO, stdout is reserved for MCP protocol messages (JSON-RPC).
+# ANY other text printed to stdout (the Spring banner, a console log line) corrupts the stream
+# and Claude Desktop drops the connection. So: no banner, no console logging, no web server.
+spring:
+  main:
+    web-application-type: none   # no Tomcat; this process only talks MCP
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        enabled: true
+        stdio: true
+        name: troubleshooting-assistant
+        version: 0.0.1
+
+logging:
+  pattern:
+    console: ""                  # empty pattern = nothing logged to the console
+  file:
+    name: ${java.io.tmpdir}/ai-troubleshooting-mcp.log   # logs go here instead (usually %TEMP% on Windows)

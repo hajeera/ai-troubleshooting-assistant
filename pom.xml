@@ -20,7 +20,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-ai.version>2.0.0</spring-ai.version>
+        <spring-ai.version>2.0.2</spring-ai.version>
     </properties>
 
     <dependencies>
@@ -36,8 +36,14 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Spring AI starters get added day by day:
-             Day 3: MCP server   Day 4: pgvector + embeddings   Day 5: chat model -->
+        <!-- Day 3: MCP server over STDIO (Claude Desktop starts the jar and talks via stdin/stdout).
+             Also brings in Spring AI's @Tool support. Version comes from the Spring AI BOM below. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server</artifactId>
+        </dependency>
+
+        <!-- Spring AI starters still to come:  Day 4: pgvector + embeddings   Day 5: chat model -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

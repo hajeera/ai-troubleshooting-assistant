@@ -1,6 +1,11 @@
 spring:
   application:
     name: ai-troubleshooting-assistant
+  ai:
+    mcp:
+      server:
+        # Off for normal runs (IntelliJ, tests). The "mcp" profile turns it on for Claude Desktop.
+        enabled: false
 
 server:
   port: 8080
