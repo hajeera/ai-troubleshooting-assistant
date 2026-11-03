@@ -5,10 +5,12 @@ import com.troubleshooting.assistant.repository.MockDataRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /** Checks what the AI will see: tool names, descriptions and parameter schemas, plus one real call. */
 class TroubleshootingToolsTest {
@@ -20,7 +22,7 @@ class TroubleshootingToolsTest {
         ServiceHealthService health = new ServiceHealthService(repository);
         return new TroubleshootingTools(health,
                 new LogSearchService(repository, health),
-                new IncidentService(repository));
+                new IncidentService(mock(VectorStore.class), repository, 0.3));   // vector search not used in these tests
     }
 
     @Test

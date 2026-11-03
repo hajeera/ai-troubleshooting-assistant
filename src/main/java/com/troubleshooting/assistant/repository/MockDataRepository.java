@@ -65,6 +65,10 @@ public class MockDataRepository {
         return incidents;
     }
 
+    public Optional<Incident> findIncident(String id) {
+        return incidents.stream().filter(i -> i.id().equals(id)).findFirst();
+    }
+
     // ---------- loading helpers ----------
 
     private static <T> T readJson(JsonMapper mapper, String path, Class<T> type) {

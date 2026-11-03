@@ -1,58 +1,101 @@
 package com.troubleshooting.assistant.tools;
 
 import com.troubleshooting.assistant.model.IncidentMatch;
+import com.troubleshooting.assistant.rag.IncidentIndexer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+/**
+ * Fast unit tests for the semantic IncidentService, WITHOUT OpenAI or Postgres:
+ * the VectorStore is replaced by a Mockito mock that returns prepared Documents.
+ * We test OUR logic: the search request we build and how results are mapped back to incidents.
+ * (The real embedding + pgvector behaviour is covered by IncidentSemanticSearchTest.)
+ */
 class IncidentServiceTest {
 
+    private VectorStore vectorStore;
     private IncidentService incidents;
 
     @BeforeEach
     void setUp() {
-        incidents = new IncidentService(TestData.repository());
+        vectorStore = mock(VectorStore.class);
+        incidents = new IncidentService(vectorStore, TestData.repository(), 0.3);
     }
 
     @Test
-    void connectionPoolProblemFindsTheRefundJobIncidentFirst() {
-        List<IncidentMatch> result = incidents.findSimilarIncidents("connection pool exhausted", null);
+    void buildsSearchRequestWithQueryTopKAndThreshold() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
-        assertThat(result).isNotEmpty().hasSizeLessThanOrEqualTo(3);
-        assertThat(result.getFirst().incident().id()).isEqualTo("INC-1042");
+        incidents.findSimilarIncidents("all db connections busy", 5);
+
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(vectorStore).similaritySearch(captor.capture());
+        assertThat(captor.getValue().getQuery()).isEqualTo("all db connections busy");
+        assertThat(captor.getValue().getTopK()).isEqualTo(5);
+        assertThat(captor.getValue().getSimilarityThreshold()).isEqualTo(0.3);
     }
 
     @Test
-    void dnsProblemFindsDnsIncident() {
-        List<IncidentMatch> result = incidents.findSimilarIncidents("DNS resolution", null);
+    void defaultsAndCapsTheLimit() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
 
-        assertThat(result.getFirst().incident().id()).isEqualTo("INC-1140");
-        assertThat(result.getFirst().score()).isEqualTo(1.0);
+        incidents.findSimilarIncidents("x", null);
+        incidents.findSimilarIncidents("x", 500);
+
+        verify(vectorStore, times(2)).similaritySearch(captor.capture());
+        assertThat(captor.getAllValues()).extracting(SearchRequest::getTopK).containsExactly(3, 10);
     }
 
     @Test
-    void resultsAreBestFirst() {
-        List<IncidentMatch> result = incidents.findSimilarIncidents("payment database timeout", 10);
+    void mapsDocumentsBackToFullIncidentsWithScores() {
+        Document hit = Document.builder()
+                .id(IncidentIndexer.stableId("INC-1042"))
+                .text("Title: Payment failures due to DB connection pool exhaustion ...")
+                .metadata(Map.of(IncidentIndexer.INCIDENT_ID, "INC-1042"))
+                .score(0.8123)
+                .build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(hit));
 
-        assertThat(result).extracting(IncidentMatch::score)
-                .isSortedAccordingTo((a, b) -> Double.compare(b, a));
-    }
-
-    @Test
-    void unrelatedQueryReturnsNothing() {
-        assertThat(incidents.findSimilarIncidents("xyzzy plugh", null)).isEmpty();
-    }
-
-    @Test
-    void knownLimitationExactWordsOnly() {
-        // Same meaning as INC-1042, different words ("connections" vs "connection", "busy" vs "exhaustion"),
-        // so keyword matching misses it completely. Day 4 (embeddings) should find it.
-        // This test documents the limitation; flip it on Day 4.
         List<IncidentMatch> result = incidents.findSimilarIncidents("all db connections busy", null);
 
-        assertThat(result).noneMatch(m -> m.incident().id().equals("INC-1042"));
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().incident().id()).isEqualTo("INC-1042");
+        assertThat(result.getFirst().incident().resolution()).contains("chunked commits"); // full record, not just the embedded text
+        assertThat(result.getFirst().score()).isEqualTo(0.812);
+    }
+
+    @Test
+    void ignoresDocumentsWithUnknownIncidentId() {
+        Document stale = Document.builder()
+                .id(IncidentIndexer.stableId("INC-9999"))
+                .text("deleted incident")
+                .metadata(Map.of(IncidentIndexer.INCIDENT_ID, "INC-9999"))
+                .score(0.9)
+                .build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(stale));
+
+        assertThat(incidents.findSimilarIncidents("anything", null)).isEmpty();
+    }
+
+    @Test
+    void blankQueryReturnsNothingWithoutCallingTheStore() {
+        assertThat(incidents.findSimilarIncidents("  ", null)).isEmpty();
+        verifyNoInteractions(vectorStore);
     }
 }

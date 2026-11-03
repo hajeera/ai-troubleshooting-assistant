@@ -1,23 +1,25 @@
 package com.troubleshooting.assistant.tools;
 
-import com.troubleshooting.assistant.model.Incident;
 import com.troubleshooting.assistant.model.IncidentMatch;
+import com.troubleshooting.assistant.rag.IncidentIndexer;
 import com.troubleshooting.assistant.repository.MockDataRepository;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
 /**
- * Tool 3: find past incidents similar to a description.
+ * Tool 3: find past incidents similar to a description, by MEANING (semantic search).
  * <p>
- * Day 2 version: simple keyword overlap. It only matches exact words, so "exhausted" does NOT
- * match "exhaustion" and "DB" does not match "database". Day 4 replaces this with embeddings
- * and pgvector, which match by meaning. Keep the results from this version to compare.
+ * Day 4 version: the query is turned into an embedding (vector) and pgvector returns the stored
+ * incidents whose vectors are closest by cosine similarity. "all db connections busy" now finds
+ * INC-1042 ("connection pool exhaustion") even though the words differ.
+ * <p>
+ * The Day 2 keyword version is kept in test sources as KeywordIncidentSearch, for comparison.
  */
 @Service
 public class IncidentService {
@@ -25,55 +27,50 @@ public class IncidentService {
     static final int DEFAULT_LIMIT = 3;
     static final int MAX_LIMIT = 10;
 
-    /** Common words that carry no meaning for matching. */
-    private static final Set<String> STOP_WORDS = Set.of(
-            "the", "and", "for", "are", "was", "with", "why", "what", "how", "from", "this", "that",
-            "service", "is", "a", "an", "of", "to", "in", "on");
-
+    private final VectorStore vectorStore;
     private final MockDataRepository repository;
+    private final double similarityThreshold;
 
-    public IncidentService(MockDataRepository repository) {
+    public IncidentService(VectorStore vectorStore,
+                           MockDataRepository repository,
+                           @Value("${app.incidents.similarity-threshold:0.3}") double similarityThreshold) {
+        this.vectorStore = vectorStore;
         this.repository = repository;
+        this.similarityThreshold = similarityThreshold;
     }
 
     /**
      * @param query free-text description of the current problem
      * @param limit optional max results; null = 3, capped at 10
-     * @return matches with score > 0, best first
+     * @return matches above the similarity threshold, best first
      */
     public List<IncidentMatch> findSimilarIncidents(String query, Integer limit) {
-        Set<String> queryWords = words(query);
-        if (queryWords.isEmpty()) {
+        if (query == null || query.isBlank()) {
             return List.of();
         }
 
-        return repository.findAllIncidents().stream()
-                .map(incident -> new IncidentMatch(incident, score(queryWords, incident)))
-                .filter(match -> match.score() > 0)
-                .sorted(Comparator.comparingDouble(IncidentMatch::score).reversed()
-                        .thenComparing(match -> match.incident().id()))
-                .limit(effectiveLimit(limit))
+        SearchRequest request = SearchRequest.builder()
+                .query(query)                              // embedded by the EmbeddingModel inside the store
+                .topK(effectiveLimit(limit))               // how many nearest neighbours to return
+                .similarityThreshold(similarityThreshold)  // drop weak matches instead of returning "closest anyway"
+                .build();
+
+        return vectorStore.similaritySearch(request).stream()
+                .map(this::toMatch)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
-    /** Fraction of the query's words that appear in the incident (0.0 to 1.0). */
-    private static double score(Set<String> queryWords, Incident incident) {
-        Set<String> incidentWords = words(String.join(" ",
-                incident.title(), incident.symptoms(), incident.rootCause(),
-                String.join(" ", incident.tags())));
-        long hits = queryWords.stream().filter(incidentWords::contains).count();
-        return (double) hits / queryWords.size();
-    }
-
-    /** Lower-case, split on anything that is not a letter or digit, drop stop words and short words. */
-    private static Set<String> words(String text) {
-        if (text == null) {
-            return Set.of();
+    /** A stored Document carries the incident id in its metadata; look up the full incident by it. */
+    private IncidentMatch toMatch(Document document) {
+        Object id = document.getMetadata().get(IncidentIndexer.INCIDENT_ID);
+        if (id == null) {
+            return null;
         }
-        return Arrays.stream(text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+"))
-                .filter(w -> w.length() >= 3)
-                .filter(w -> !STOP_WORDS.contains(w))
-                .collect(Collectors.toSet());
+        double score = document.getScore() == null ? 0.0 : document.getScore();
+        return repository.findIncident(id.toString())
+                .map(incident -> new IncidentMatch(incident, Math.round(score * 1000) / 1000.0))
+                .orElse(null);
     }
 
     private static int effectiveLimit(Integer limit) {
