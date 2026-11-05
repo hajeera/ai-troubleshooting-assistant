@@ -3,11 +3,15 @@ package com.troubleshooting.assistant.tools;
 import com.troubleshooting.assistant.model.IncidentMatch;
 import com.troubleshooting.assistant.model.LogEntry;
 import com.troubleshooting.assistant.model.ServiceHealth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * The AI-facing layer: the methods an LLM is allowed to call.
@@ -16,14 +20,16 @@ import java.util.List;
  * the model reads them to decide WHICH tool to call and WHAT arguments to pass, so they are
  * written like instructions to a new on-call engineer.
  * <p>
- * The same class serves both entry points: the MCP server (Day 3, Claude Desktop) and
- * the /ask endpoint (Day 5, our own ChatClient).
+ * Every call is logged (tool, arguments, result size, duration). In the "mcp" profile the log goes
+ * to a file, never to stdout, so the MCP protocol stream stays clean.
  * <p>
  * Errors: an unknown service throws IllegalArgumentException whose message lists valid names.
  * Spring AI returns that message to the model as the tool result, so it can retry correctly.
  */
 @Component
 public class TroubleshootingTools {
+
+    private static final Logger log = LoggerFactory.getLogger(TroubleshootingTools.class);
 
     private final ServiceHealthService health;
     private final LogSearchService logSearch;
@@ -39,7 +45,7 @@ public class TroubleshootingTools {
             description = "List the names of all services that can be investigated. "
                     + "Call this first if you are not sure of the exact service name.")
     public List<String> listServices() {
-        return health.listServices();
+        return logged("listServices", "", health::listServices);
     }
 
     @Tool(name = "checkServiceHealth",
@@ -49,7 +55,8 @@ public class TroubleshootingTools {
                     + "Start an investigation here.")
     public ServiceHealth checkServiceHealth(
             @ToolParam(description = "Exact service name, e.g. payment-service") String service) {
-        return health.checkServiceHealth(service);
+        return logged("checkServiceHealth", "service=" + service,
+                () -> health.checkServiceHealth(service));
     }
 
     @Tool(name = "searchLogs",
@@ -61,17 +68,44 @@ public class TroubleshootingTools {
             @ToolParam(description = "Optional log level: ERROR, WARN, INFO or DEBUG", required = false) String level,
             @ToolParam(description = "Optional case-insensitive text to find in the message", required = false) String keyword,
             @ToolParam(description = "Optional max entries to return, default 20, max 50", required = false) Integer limit) {
-        return logSearch.searchLogs(service, level, keyword, limit);
+        return logged("searchLogs",
+                "service=%s level=%s keyword=%s limit=%s".formatted(service, level, keyword, limit),
+                () -> logSearch.searchLogs(service, level, keyword, limit));
     }
 
     @Tool(name = "findSimilarIncidents",
             description = "Find past production incidents similar to the current problem, with their "
                     + "root cause and resolution. Describe the symptoms you observed "
                     + "(e.g. 'payment requests fail with DB connection pool exhausted'). "
-                    + "Each result has a score from 0 to 1; treat low scores as weak evidence.")
+                    + "Each result has a similarity score from 0 to 1; treat lower scores as weaker evidence.")
     public List<IncidentMatch> findSimilarIncidents(
             @ToolParam(description = "Description of the symptoms or suspected cause") String query,
             @ToolParam(description = "Optional max results, default 3, max 10", required = false) Integer limit) {
-        return incidents.findSimilarIncidents(query, limit);
+        return logged("findSimilarIncidents", "query=\"%s\" limit=%s".formatted(query, limit),
+                () -> incidents.findSimilarIncidents(query, limit));
+    }
+
+    /**
+     * Runs one tool call and logs it: name, arguments, how many results, how long it took.
+     * Failures are logged at WARN and re-thrown, so the model still receives the error message.
+     */
+    private <T> T logged(String tool, String args, Supplier<T> call) {
+        long start = System.nanoTime();
+        try {
+            T result = call.get();
+            log.info("tool={} {} results={} durationMs={}", tool, args, sizeOf(result), elapsedMs(start));
+            return result;
+        } catch (RuntimeException e) {
+            log.warn("tool={} {} failed after {} ms: {}", tool, args, elapsedMs(start), e.getMessage());
+            throw e;
+        }
+    }
+
+    private static int sizeOf(Object result) {
+        return result instanceof Collection<?> c ? c.size() : (result == null ? 0 : 1);
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
     }
 }

@@ -10,12 +10,14 @@ import org.springframework.ai.vectorstore.VectorStore;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 /** Checks what the AI will see: tool names, descriptions and parameter schemas, plus one real call. */
 class TroubleshootingToolsTest {
 
-    private final ToolCallbackProvider provider = new ToolConfig().troubleshootingToolCallbacks(tools());
+    private final TroubleshootingTools tools = tools();
+    private final ToolCallbackProvider provider = new ToolConfig().troubleshootingToolCallbacks(tools);
 
     private static TroubleshootingTools tools() {
         MockDataRepository repository = TestData.repository();
@@ -48,6 +50,14 @@ class TroubleshootingToolsTest {
         String result = callback("checkServiceHealth").call("{\"service\":\"payment-service\"}");
 
         assertThat(result).contains("DOWN");
+    }
+
+    @Test
+    void errorsStillReachTheCallerThroughTheLoggingWrapper() {
+        // The logging wrapper must re-throw, so the model still gets the helpful message and can retry.
+        assertThatThrownBy(() -> tools.checkServiceHealth("billing-service"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Known services");
     }
 
     private ToolCallback callback(String name) {
