@@ -20,8 +20,13 @@ spring:
       embedding:
         model: text-embedding-3-small   # cheaper and better than the old default (ada-002)
 
-    model:
-      chat: none                         # no chat model until Day 5
+      chat:
+        model: gpt-5-mini                # chat LLM for /ask (GPT-5 models don't accept a temperature setting)
+
+    tools:
+      limits:
+        max-calls-per-tool-default: 5    # safety: stop a looping agent early (cost + latency)
+        max-total-tool-calls: 12
 
     vectorstore:
       pgvector:

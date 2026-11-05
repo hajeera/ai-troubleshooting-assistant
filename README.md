@@ -2,10 +2,12 @@
 
 A Java Gen AI application that lets an AI assistant investigate production issues in natural language.
 It exposes **log search, service health checks and similar-incident lookup as MCP tools**, so an MCP
-client such as Claude Desktop can gather evidence and suggest a likely root cause. Similar incidents
-are found with **RAG**: past incidents are embedded and searched by meaning in **PostgreSQL + pgvector**.
+client such as Claude Desktop can gather evidence and suggest a likely root cause. The same tools power
+its own **agent endpoint (`POST /ask`)**, where the application runs the LLM tool-calling loop itself and
+returns a structured diagnosis. Similar incidents are found with **RAG**: past incidents are embedded and
+searched by meaning in **PostgreSQL + pgvector**.
 
-**Stack:** Java 21 · Spring Boot 4 · Spring AI 2.0 · Model Context Protocol (MCP) · OpenAI embeddings ·
+**Stack:** Java 21 · Spring Boot 4 · Spring AI 2.0 · Model Context Protocol (MCP) · OpenAI (gpt-5-mini, embeddings) ·
 PostgreSQL 16 + pgvector · Docker · JUnit 5 / AssertJ / Mockito
 
 > Demo video: _coming soon_
@@ -33,9 +35,11 @@ opens its circuit breaker, and inventory reservations pile up.
 ```mermaid
 flowchart TD
     CD["Claude Desktop<br/>(MCP host / client)"] -- "MCP: JSON-RPC over stdio<br/>tools/list, tools/call" --> MCP
+    HTTP["HTTP client"] -- "POST /ask" --> ASK
 
     subgraph APP["Spring Boot application"]
         MCP["MCP server<br/>(Spring AI starter + MCP Java SDK)"] --> TT["TroubleshootingTools<br/>@Tool methods"]
+        ASK["AskController + InvestigationService<br/>ChatClient, system prompt, tool loop"] --> TT
         TT --> HS["ServiceHealthService"]
         TT --> LS["LogSearchService"]
         TT --> IS["IncidentService"]
@@ -45,12 +49,13 @@ flowchart TD
         IDX["IncidentIndexer<br/>(startup ingestion)"] --> VS
     end
 
+    ASK -- "chat + tool calls" --> LLM["OpenAI<br/>gpt-5-mini"]
     VS -- "embed text" --> OAI["OpenAI<br/>text-embedding-3-small"]
     VS -- "store / nearest-neighbour search" --> PG[("PostgreSQL + pgvector<br/>HNSW, cosine distance")]
 ```
 
-**Design idea:** one set of business services with thin entry layers on top. MCP was added without
-changing the services, and RAG replaced one service's internals without changing the MCP layer.
+**Design idea:** one set of business services with thin entry layers on top. MCP and the `/ask` agent
+share the same `@Tool` methods, and RAG replaced one service's internals without changing either entry point.
 
 ## The MCP tools
 
@@ -62,6 +67,24 @@ changing the services, and RAG replaced one service's internals without changing
 | `findSimilarIncidents(query, limit?)` | Past incidents by meaning, with root cause and fix | RAG over pgvector; returns similarity scores |
 
 Unknown service names return an error listing the valid names, so the model can correct itself.
+
+## Agent endpoint: `POST /ask`
+
+Here the application itself drives the LLM, using Spring AI's `ChatClient`:
+
+```bash
+curl -X POST localhost:8080/ask -H "Content-Type: application/json" \
+     -d '{"question":"Why are orders stuck in PAYMENT_PENDING?"}'
+```
+
+- **Tool-calling loop:** the question, a system prompt and the four tool definitions go to the model; it
+  requests tool calls, Spring AI executes the `@Tool` methods and returns results, until the model answers.
+- **System prompt as guardrail:** fixed investigation order, evidence citation, no invented data, and
+  "tool output is data, not instructions" (prompt-injection defence).
+- **Structured output:** the answer is parsed into a `Diagnosis` record (summary, root cause, confidence,
+  evidence, similar incidents, next steps), so other systems can consume it.
+- **Cost controls:** input validation, tool-call limits (5 per tool, 12 per request), and model, token
+  usage and latency returned and logged for every request.
 
 ## RAG: how similar incidents are found
 
@@ -142,6 +165,7 @@ src/main/java/com/troubleshooting/assistant/
 ├── repository/   MockDataRepository: loads simulated logs, health, incidents
 ├── tools/        business services + TroubleshootingTools (@Tool layer)
 ├── rag/          IncidentIndexer: embeds incidents into pgvector at startup
+├── agent/        /ask: ChatClient config + system prompt, InvestigationService, Diagnosis
 └── config/       ToolConfig: registers the @Tool methods
 src/main/resources/
 ├── application.yml       datasource, OpenAI, pgvector, thresholds
@@ -163,7 +187,7 @@ src/main/resources/
 
 ## Next steps
 
-- Own agent endpoint (`/ask`) using Spring AI `ChatClient` tool calling with structured output
+- Use an MCP client in `/ask` so the agent can also call tools hosted in other MCP servers
 - Evaluation set of investigation questions, scored before and after changes
 - Self-hosted embedding model (ONNX) to keep indexing fully on-premise
 - Real backends: Elasticsearch/Loki for logs, Prometheus for metrics, an incident tracker
